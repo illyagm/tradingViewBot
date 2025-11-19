@@ -59,7 +59,7 @@ Runs inside Raydium Perps and:
 
 ---
 
-## Backend (Node.js)
+## Backend (Express.js)
 
 A lightweight server handles communication between platforms.
 
