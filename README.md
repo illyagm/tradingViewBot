@@ -120,6 +120,17 @@ npm install
 npm start
 ```
 
+## Roadmap
+
+### Server & Infrastructure
+- Deploy the server from the local development environment to a dedicated hosting environment.
+- Improve stability
+
+### Scalability and Multi‑Device Execution
+- Add support for multiple simultaneous devices sending and receiving signals.
+- Improve WebSocket handling
+
+
 ### DISCLAIMER
 
 By using this code, you acknowledge that:
