@@ -8,7 +8,14 @@ The system enables automated trade execution, real-time signal synchronization, 
 >
 > - TradingView scripts must be added under `https://www.tradingview.com/*` and the active that you would like to trade
 > - Raydium scripts must be added under `https://perps.raydium.io/*`
-> - Do not mix them. Each website loads only the script intended for that platform.
+> - Do not mix them. Each website loads only the script intended for that platform
+
+**TradingView**
+<img width="1325" height="211" alt="image" src="https://github.com/user-attachments/assets/54235087-8440-45d3-bc94-8fa17a3f5323" />
+
+**Raydium**
+<img width="1456" height="192" alt="image" src="https://github.com/user-attachments/assets/33a04cf3-7383-426c-836b-790a82c84df7" />
+
 
 ---
 
@@ -34,6 +41,9 @@ A transparent overlay that prevents accidental clicks or movements on TradingVie
 - Toggle: **Alt + B**
 - Blocks all UI interactions
 - Safe for alerts/indicators
+
+*And why the Screen Blocker? This is one of the limitations of this approach. Trading view bridge script is based on numeric label values, on each candle when interacting with the chart, this value changes.*
+*This could lead to an undesired order execution.*
 
 ### 3. Raydium Order Executor
 Runs inside Raydium Perps and:
@@ -74,6 +84,9 @@ If configured (`TELEGRAM_BOT_TOKEN` + `CHAT_ID`), the backend sends:
 
 - Open position with all the parameters 
 
+<img width="286" height="212" alt="image" src="https://github.com/user-attachments/assets/a91264c6-ac50-4e44-a758-e18f452ec9d1" />
+
+
 ---
 
 ## Requirements
@@ -105,3 +118,14 @@ Tampermonkey loads scripts only on their defined domains.
 ```bash
 npm install
 npm start
+```
+
+### DISCLAIMER
+
+By using this code, you acknowledge that:
+
+- **You understand the risks of automating trading-related actions.**
+- **You are solely responsible for complying with the Terms of Service of any platform involved.**
+- **You accept that improper use may lead to unexpected behavior, losses, or account restrictions.**
+- **The authors of this project assume no liability for damages, financial losses, malfunction, or any other consequences resulting from the use, misuse, or inability to use this software.**
+- **If the words 'automate' and 'trading' appear in the same sentence, you should always proceed with caution. Really.**
