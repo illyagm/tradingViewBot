@@ -1,4 +1,4 @@
-# TradingView ←→ Raydium Automation Bridge
+# TradingView → Raydium Automation Bridge
 
 This project links **TradingView** and **Raydium Perpetuals** through a local WebSocket/HTTP bridge and three userscripts.  
 The system enables automated trade execution, real-time signal synchronization, and cross-platform state tracking.
