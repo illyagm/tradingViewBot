@@ -1,6 +1,5 @@
 import { Router } from "express";
 import { HTTP_PORT } from "../../config/env.js";
-import { broadcastToClients } from "../../ws/wsServer.js";
 
 const router = Router();
 
