@@ -93,7 +93,7 @@ If configured (`TELEGRAM_BOT_TOKEN` + `CHAT_ID`), the backend sends:
 
 - Node.js 18+
 - Tampermonkey or compatible userscript runner
-- TradingView (no need for paid tiers, this project has as objective, bypass all the subscription costs)
+- TradingView (no need for paid tiers, this project has an objective, bypass all the subscription costs)
 - Raydium Perps interface
 - Telegram bot
 
