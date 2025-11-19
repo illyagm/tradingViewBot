@@ -1,0 +1,360 @@
+//@version=5
+strategy("Trading view strategy",
+     overlay=true,
+     calc_on_every_tick=true,
+     pyramiding=0,
+     initial_capital=9600,
+     commission_type=strategy.commission.percent,
+     slippage=2,
+     commission_value=0.0)
+
+
+// Inputs
+slMult         = input.float(1.5, "SL × ATR", step=0.1)
+tpMult         = input.float(2, "TP × ATR", step=0.1)
+atrLen         = input.int(14, "ATR Length", minval=1)
+riskPct        = input.float(2.5, "Risk % of equity", step=0.1, minval=0)
+cooldownBars   = input.int(5, "Cooldown (bars)", minval=0)
+
+maxLeverage    = input.float(4, "Max allowed leverage", step=0.5)
+
+// Trailing
+useTrailing    = input.bool(true, "Trailing Stop")
+trailMult      = input.float(1.5, "Trailing SL × ATR", step=0.1)
+trailStartATR  = input.float(2, "Activate Trailing SL after reaching ATRx(n)", step=0.1)
+trailToBE      = input.bool(true, "Break even")
+trailUseTP     = input.bool(true, "FIXED TP with trailing")
+
+// Parcial 80/20 2×ATR
+usePartialTP   = input.bool(false, "2×ATR take 80% of position")
+partialPct     = input.float(80, "Parcial %", minval=1, maxval=99)
+
+// Daily stop
+useDailyStop   = input.bool(false,  "Stop if daily loss exceeds certain %")
+dailyLossPct   = input.float(3.0,   "Max daily loss (%)", step=0.5)
+
+// Permitir lados
+useLong        = input.bool(true, "Allow Long")
+useShort       = input.bool(true, "Allow Short")
+
+// Pausa por racha de pérdidas
+useLossPause  = input.bool(true,  "Pause after losing streak", group="Gestión de racha")
+lossStreakN   = input.int(4,      "Number of lost trades before pause", minval=1, group="Gestión de racha")
+pauseDays     = input.int(6,      "Pause days", minval=1, maxval=14, group="Gestión de racha")
+
+// Límite de backtest
+useDateLimit     = input.bool(true,  "Limit backtest by date")
+limitByRange     = input.bool(true, "Use manual range")
+daysBack         = input.int(200, "Last n days", minval=1)
+
+fromYear  = input.int(2025, "From - Year",  minval=1970, maxval=2100)
+fromMonth = input.int(10,   "From - Month",  minval=1, maxval=12)
+fromDay   = input.int(24,    "From - Day",  minval=1, maxval=31)
+
+toYear    = input.int(2025, "To - Year",  minval=1970, maxval=2100)
+toMonth   = input.int(11,   "To - Month",  minval=1, maxval=12)
+toDay     = input.int(15,   "To - Day",  minval=1, maxval=31)
+
+// Ventana de tiempo
+startTime = limitByRange ? timestamp(fromYear, fromMonth, fromDay, 0, 0) : (timenow - daysBack * 24 * 60 * 60 * 1000)
+endTime   = limitByRange ? timestamp(toYear, toMonth, toDay, 23, 59)    : timenow
+inDateRange = not useDateLimit or (time >= startTime and time <= endTime)
+
+// ======================
+// Señal base
+// ======================
+wrLen          = input.int(12, "Williams %R length", minval=2)
+wrOversold     = input.float(-80.0, "Treshhold %R Oversold (para SHORT)", step=1.0, minval=-100, maxval=0)
+wrOverbought   = input.float(-20.0, "Treshhold %R Overbought (para LONG)", step=1.0, minval=-100, maxval=0)
+kijunLen       = input.int(25, "Kijun-sen length (Ichimoku)", minval=2)
+volSmaLen      = input.int(20, "SMA volume", minval=1)
+baseAtrMult    = input.float(1, "Max distance to Kijun (×ATR)", step=0.1, minval=0)
+
+maxBarsSinceCross = input.int(6, "Máx bars from Kijun cross in favor", minval=0, maxval=10)
+
+// %ATR límites
+useAtrPctMax   = input.bool(true,  "Use %ATR max filter")
+atrPctMax      = input.float(1.2,  "%ATR max allowed (ATR/Close*100)", step=0.1, minval=0)
+useAtrPctMin   = input.bool(true,  "Use min %ATR")
+atrPctMin      = input.float(0.35, "%ATR min (ATR/Close*100)", step=0.05, minval=0)
+
+// SL dinámico
+useDynamicSL  = input.bool(true,  "Dynamic SL for %ATR")
+atrPctThresh  = input.float(0.50, "Threshold %ATR for high SL", step=0.05, minval=0)
+slMultLow     = input.float(1.5,  "SL × ATR (low)")
+slMultHigh    = input.float(1.5,  "SL × ATR (high)")
+
+// Filtro direccional EMA
+useEmaFilter  = input.bool(true,  "Use EMA for as filter")
+emaLen        = input.int(50,     "EMA length", minval=1)
+
+// Banda precio–Kijun
+useBand    = input.bool(true, "Price band–Kijun", group="Filtros tendencia")
+minBandATR = input.float(0.25, "Min distance (×ATR)", step=0.05, group="Filtros tendencia")
+maxBandATR = input.float(1.0, "Max distance (×ATR)", step=0.05, group="Filtros tendencia")
+
+// Ventana horaria
+useSundayFilter = input.bool(true,  "Block on Sundays")
+useHourFilter   = input.bool(true,  "Block out of working hours")
+tz              = input.string("Europe/Madrid", "Timezone")
+//20:30 a 8:30
+// BLOCKING HOURS
+startHour       = input.int(20,"Starting from (hh)",   minval=0, maxval=23)
+startMinute     = input.int(30,  "Starting from (mm)",    minval=0, maxval=59)
+endHour         = input.int(8,  "End (hh)",      minval=0, maxval=23)
+endMinute       = input.int(30, "End (mm)",       minval=0, maxval=59)
+
+// Basic calculations
+atr    = ta.atr(atrLen)
+ema100 = ta.ema(close, emaLen)
+
+// ADX
+len = 14
+upMove   = ta.change(high)
+downMove = -ta.change(low)
+plusDM   = (upMove > downMove and upMove > 0) ? upMove : 0.0
+minusDM  = (downMove > upMove and downMove > 0) ? downMove : 0.0
+trueRange = math.max(high - low, math.max(math.abs(high - close[1]), math.abs(low - close[1])))
+smTR   = ta.rma(trueRange, len)
+smPDM  = ta.rma(plusDM, len)
+smMDM  = ta.rma(minusDM, len)
+plusDI = 100 * smPDM / math.max(smTR, 1e-10)
+minusDI= 100 * smMDM / math.max(smTR, 1e-10)
+dx  = 100 * math.abs(plusDI - minusDI) / math.max(plusDI + minusDI, 1e-10)
+adx = ta.rma(dx, len)
+
+// Williams %R
+hh = ta.highest(high, wrLen)
+ll = ta.lowest(low, wrLen)
+wr = -100.0 * (hh - close) / math.max(hh - ll, 1e-10)
+
+// Kijun, volume, baseline
+kijun    = (ta.highest(high, kijunLen) + ta.lowest(low, kijunLen)) / 2.0
+volMA    = ta.sma(volume, volSmaLen)
+volOK    = true
+distBase = math.abs(close - kijun)
+nearBase = distBase <= baseAtrMult * atr
+
+// %ATR
+atrPct   = (atr / close) * 100.0
+atrPctOK = (not useAtrPctMax or atrPct <= atrPctMax) and (not useAtrPctMin or atrPct >= atrPctMin)
+
+// Live dynamic SL
+slMultUse_rt = useDynamicSL ? (atrPct > atrPctThresh ? slMultHigh : slMultLow) : slMult
+
+// Kijun-price band
+distP  = math.abs(close - kijun)
+bandOK = (distP >= minBandATR*atr) and (distP <= maxBandATR*atr)
+
+// Time window
+hLocal   = hour(time, tz)
+mLocal   = minute(time, tz)
+dowLocal = dayofweek(time, tz)
+curMin   = hLocal * 60 + mLocal
+startMin = startHour * 60 + startMinute
+endMin   = endHour   * 60 + endMinute
+crossesMidnight = startMin > endMin
+blockedByHour =
+     useHourFilter and (
+         (not crossesMidnight and (curMin >= startMin and curMin < endMin)) or
+         (crossesMidnight    and (curMin >= startMin or  curMin < endMin))
+     )
+isSunday = useSundayFilter and (dowLocal == dayofweek.sunday)
+entryWin = not isSunday and not blockedByHour
+
+// Cooldown
+var int lastFlatBar = na
+isFlat = strategy.position_size == 0
+if isFlat and not isFlat[1]
+    lastFlatBar := bar_index
+cooldownOk = isFlat and (na(lastFlatBar) or bar_index >= lastFlatBar + cooldownBars)
+
+// Pause trading after n loss streak
+var int consecLosses = 0
+var int pauseUntil   = na
+tradeClosed = strategy.position_size == 0 and strategy.position_size[1] != 0
+lastPnl     = strategy.netprofit - strategy.netprofit[1]
+if tradeClosed
+    if lastPnl < 0
+        consecLosses += 1
+    else if lastPnl > 0
+        consecLosses := 0
+    if useLossPause and consecLosses >= lossStreakN
+        pauseUntil   := time + pauseDays * 24 * 60 * 60 * 1000
+        consecLosses := 0
+inPause = useLossPause and not na(pauseUntil) and time < pauseUntil
+if useLossPause and not na(pauseUntil) and time >= pauseUntil
+    pauseUntil := na
+
+// Daily stop
+var float dayPnL0 = na
+newDay = ta.change(time("D"))
+if newDay
+    dayPnL0 := strategy.netprofit
+dayPnL = strategy.netprofit - nz(dayPnL0, strategy.netprofit)
+dayStop = useDailyStop and dayPnL <= -(strategy.equity * dailyLossPct/100.0)
+
+// Signals
+condWR_long      = wr >= wrOverbought
+condWR_short     = wr <= wrOversold
+condKijun_long   = close > kijun
+condKijun_short  = close < kijun
+crossUp    = ta.crossover(close, kijun)
+crossDown  = ta.crossunder(close, kijun)
+recentUp   = ta.barssince(crossUp)   <= maxBarsSinceCross
+recentDown = ta.barssince(crossDown) <= maxBarsSinceCross
+emaLongOK  = not useEmaFilter or close > ema100
+emaShortOK = not useEmaFilter or close < ema100
+
+longCore  = condWR_long  and condKijun_long  and volOK and nearBase and atrPctOK and recentUp  and emaLongOK
+shortCore = condWR_short and condKijun_short and volOK and nearBase and atrPctOK and recentDown and emaShortOK
+longCore  := longCore  and (not useBand or bandOK)
+shortCore := shortCore and (not useBand or bandOK)
+
+longSignal  = longCore  and entryWin and cooldownOk and isFlat and useLong  and inDateRange and not inPause and not dayStop
+shortSignal = shortCore and entryWin and cooldownOk and isFlat and useShort and inDateRange and not inPause and not dayStop
+
+// Sizing depending on the risk
+f_qty_for_risk(entryPrice, stopPrice) =>
+    riskAmount  = strategy.equity * (riskPct / 100.0)
+    perUnitRisk = math.abs(entryPrice - stopPrice)
+    rawQty      = perUnitRisk > 0 ? (riskAmount / perUnitRisk) : 0.0
+    maxNominal  = strategy.equity * maxLeverage
+    math.min(rawQty, maxNominal / entryPrice)
+
+
+// Persistent status in order to freeze the SL values
+// ======================
+var float hiSinceEntry   = na
+var float loSinceEntry   = na
+var float stopL          = na
+var float stopS          = na
+var float entryPx        = na
+var float atrEntry       = na
+var float slMultUseEntry = na
+var float stopFixedL     = na
+var float stopFixedS     = na
+
+newLong  = strategy.position_size > 0 and strategy.position_size[1] <= 0
+newShort = strategy.position_size < 0 and strategy.position_size[1] >= 0
+flatNow  = strategy.position_size == 0
+
+if newLong
+    hiSinceEntry   := high
+    loSinceEntry   := na
+    entryPx        := strategy.position_avg_price
+    atrEntry       := atr
+    slMultUseEntry := slMultUse_rt
+    stopFixedL     := entryPx - slMultUseEntry * atrEntry
+    stopL          := na
+if newShort
+    loSinceEntry   := low
+    hiSinceEntry   := na
+    entryPx        := strategy.position_avg_price
+    atrEntry       := atr
+    slMultUseEntry := slMultUse_rt
+    stopFixedS     := entryPx + slMultUseEntry * atrEntry
+    stopS          := na
+if flatNow
+    hiSinceEntry   := na
+    loSinceEntry   := na
+    entryPx        := na
+    atrEntry       := na
+    slMultUseEntry := na
+    stopFixedL     := na
+    stopFixedS     := na
+    stopL          := na
+    stopS          := na
+
+if strategy.position_size > 0
+    hiSinceEntry := na(hiSinceEntry) ? high : math.max(hiSinceEntry, high)
+if strategy.position_size < 0
+    loSinceEntry := na(loSinceEntry) ? low  : math.min(loSinceEntry,  low)
+
+
+// Entries
+if barstate.isconfirmed
+    if longSignal
+        entry = close
+        // stop a usar para sizing, igual al que luego se congela
+        stopCalc  = entry - slMultUse_rt * atr
+        qty       = f_qty_for_risk(entry, stopCalc)
+        strategy.entry("L", strategy.long, qty=qty)
+    if shortSignal
+        entry = close
+        stopCalc  = entry + slMultUse_rt * atr
+        qty       = f_qty_for_risk(entry, stopCalc)
+        strategy.entry("S", strategy.short, qty=qty)
+
+
+// TRAILING/SL/TP
+float tpL     = na
+float slBaseL = na
+float tpS     = na
+float slBaseS = na
+
+if strategy.position_size > 0 and not na(entryPx)
+    tpL     := entryPx + tpMult * atr
+    slBaseL := stopFixedL             
+if strategy.position_size < 0 and not na(entryPx)
+    tpS     := entryPx - tpMult * atr
+    slBaseS := stopFixedS            
+
+if strategy.position_size != 0 and not na(entryPx)
+    advanceOK = true
+    if trailStartATR > 0
+        advanceOK := (strategy.position_size > 0 and (close - entryPx) >= trailStartATR * atr) or
+                     (strategy.position_size < 0 and (entryPx - close) >= trailStartATR * atr)
+
+    if useTrailing and advanceOK
+        if strategy.position_size > 0
+            trailCand = hiSinceEntry - trailMult * atr
+            stopL := na(stopL) ? math.max(trailCand, slBaseL) : math.max(stopL, trailCand, slBaseL)
+            if trailToBE
+                stopL := math.max(stopL, entryPx)
+        else
+            trailCand = loSinceEntry + trailMult * atr
+            stopS := na(stopS) ? math.min(trailCand, slBaseS) : math.min(stopS, trailCand, slBaseS)
+            if trailToBE
+                stopS := math.min(stopS, entryPx)
+    else
+        // No trailing stop, always use fixed value
+        if strategy.position_size > 0
+            stopL := slBaseL
+        if strategy.position_size < 0
+            stopS := slBaseS
+
+// Partial 80% on 2×ATR (optional)
+if usePartialTP and strategy.position_size > 0 and not na(entryPx)
+    strategy.exit("L-TP-P", from_entry="L", limit=entryPx + 2*atr, qty_percent=partialPct)
+if usePartialTP and strategy.position_size < 0 and not na(entryPx)
+    strategy.exit("S-TP-P", from_entry="S", limit=entryPx - 2*atr, qty_percent=partialPct)
+
+// Exit logic
+if strategy.position_size > 0
+    strategy.exit("L-EXIT", from_entry="L", stop=stopL, limit=(trailUseTP ? tpL : na))
+if strategy.position_size < 0
+    strategy.exit("S-EXIT", from_entry="S", stop=stopS, limit=(trailUseTP ? tpS : na))
+
+// HUD / Status lines
+plot(ta.atr(atrLen),      "ATR_BINANCE",  display=display.status_line)
+plot(wr,  "%R",  display=display.status_line)
+plot(close,    "PRICE",        display=display.status_line)
+plot(inPause ? 1 : 0, "PAUSE_LOSS_STREAK", display=display.status_line)
+plot(useDailyStop and dayStop ? 1 : 0, "DAY_STOP", display=display.status_line)
+
+longTrig  = (barstate.isconfirmed and longSignal)  ? 1 : 0
+shortTrig = (barstate.isconfirmed and shortSignal) ? 1 : 0
+flatTrig  = barstate.isconfirmed and strategy.position_size == 0 and strategy.position_size[1] != 0 ? 1 : 0
+plot(flatTrig,  "TRIG_FLAT",  display=display.status_line)
+plot(longTrig,  "TRIG_LONG",  display=display.status_line)
+plot(shortTrig, "TRIG_SHORT", display=display.status_line)
+
+// Plots
+plot(kijun,  "Kijun-sen(26)", color=color.new(color.yellow, 0), linewidth=2)
+plot(ema100, "EMA50",         color=color.new(color.orange, 0), linewidth=2)
+plotshape(entryWin,       "Window ON",  style=shape.circle, location=location.bottom, size=size.tiny, color=color.new(color.blue, 0))
+plotshape(not entryWin,   "Window OFF", style=shape.circle, location=location.bottom, size=size.tiny, color=color.new(color.gray, 0))
+plotshape(cooldownOk,     "Cooldown OK", style=shape.circle, location=location.bottom, size=size.tiny, color=color.new(color.lime, 0))
+plotshape(not cooldownOk, "Cooldown",    style=shape.circle, location=location.bottom, size=size.tiny, color=color.new(color.red,  0))
+plot(close, "CURRENT_PRICE", display=display.status_line)
