@@ -1,13 +1,13 @@
 import { Router } from "express";
 import { normalizeTvPayload } from "../../utils/payloadNormalize.js";
-import { broadcastToClients } from "../../ws/wsServer.js";
+import { sendToClient } from "../../ws/wsServer.js";
 
 const router = Router();
 
 router.post("/", (req, res) => {
   try {
     const payload = normalizeTvPayload(req);
-    broadcastToClients(payload);
+    sendToClient(payload);
     res.status(200).json({ ok: true });
   } catch (error) {
     console.error("[/tv] Bad payload:", error?.message);

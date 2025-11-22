@@ -31,6 +31,7 @@ export function normalizeTvPayload(req) {
 
   const price = toNumber(data.price);
   const ts = Number(data.ts) || Date.now();
+  const clientId = data.clientId;
 
   return {
     type: "tv_signal",
@@ -38,6 +39,7 @@ export function normalizeTvPayload(req) {
     ts,
     atr,
     price,
+    clientId,
   };
 }
 
@@ -94,5 +96,6 @@ export function normalizeNotifyPayload(req) {
     leverage: toNumber(data.leverage),
     note: data.note ? String(data.note) : undefined,
     atr: toNumber(data.atr),
+    clientId: toNumber(data.clientId),
   };
 }
