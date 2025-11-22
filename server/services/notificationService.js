@@ -44,8 +44,9 @@ export async function handleNotification(payload) {
       formatLine("Leverage", payload.leverage, 2) +
       formatLine("Qty", payload.qty, 3) +
       `• TS: <code>${tsIso}</code>\n` +
-      (payload.note ? `• Note: ${payload.note}\n` : "");
-
+      (payload.note
+        ? `• Note: ${payload.note} | ClientId: ${payload.clientId}\n`
+        : "");
     await sendTelegramMessage(`${title}\n${body}`);
     return;
   }
