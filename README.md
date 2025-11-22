@@ -127,7 +127,7 @@ npm start
 - Improve stability
 
 ### Scalability and Multi‑Device Execution
-- Add support for multiple simultaneous devices sending and receiving signals.
+- Add support for multiple simultaneous devices sending and receiving signals. (COMPLETED)
 - Improve WebSocket handling
 
 
