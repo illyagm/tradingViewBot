@@ -5,7 +5,7 @@ const router = Router();
 
 // GET /pull?clientId=1
 router.get("/", (req, res) => {
-  const clientId = String(req.query.clientId || "1");
+  const clientId = String(req.query.clientId);
   const msg = dequeueForClient(clientId); // consume 1 msg
   res.status(200).json({ ok: true, msg: msg ?? null });
 });

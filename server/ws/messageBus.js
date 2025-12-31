@@ -1,7 +1,7 @@
 const queues = new Map();
 
-function getQueue(clientId = "1") {
-  const id = String(clientId || "1");
+function getQueue(clientId) {
+  const id = String(clientId);
   let q = queues.get(id);
   if (!q) {
     q = [];
@@ -30,5 +30,5 @@ export function peekForClient(clientId) {
 }
 
 export function clearClient(clientId) {
-  queues.delete(String(clientId || "1"));
+  queues.delete(String(clientId));
 }

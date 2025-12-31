@@ -11,7 +11,7 @@ router.post("/", (req, res) => {
 
     // optional clientId for different devices
     const clientId =
-      String(req.query.clientId || req.headers["x-client-id"] || "1");
+      String(req.query.clientId || req.headers["x-client-id"]);
 
     enqueueForClient(clientId, payload);
     sendToClient(payload);
