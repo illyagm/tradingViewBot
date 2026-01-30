@@ -65,6 +65,7 @@ export function normalizeNotifyPayload(req) {
     "trade_closed",
     "order_pending",
     "order_confirmed",
+    "order_canceled",
   ];
 
   if (!allowedTypes.includes(type)) {
