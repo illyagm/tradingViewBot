@@ -87,6 +87,15 @@ export async function handleNotification(payload) {
     return;
   }
 
+  if (payload.type === "order_canceled") {
+    await sendTelegramMessage(
+      `❌<b>Order canceled. Exceeded timeout</b>` +
+        (payload.symbol ? ` — <b>${payload.symbol}</b>` : "") +
+        `\n• TS: <code>${tsIso}</code>`
+    );
+    return;
+  }
+
   if (payload.type === "order_confirmed") {
     await sendTelegramMessage(
       `✅ <b>Order confirmed</b>` +
